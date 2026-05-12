@@ -2,14 +2,42 @@
 
 An intelligent retrieval-augmented generation system built with LangChain and LangGraph that combines document retrieval, relevance grading, hallucination detection, and web search to provide accurate, grounded answers.
 
+## vLLM Serving Approach
+
+This project uses **vLLM as a model server**. The RAG API does not load Qwen directly; it calls vLLM over HTTP at `http://localhost:8001/v1`, while the FastAPI RAG service runs separately on `http://localhost:8000`.
+
+Recommended runtime layout:
+
+```text
+Terminal 1: vLLM server
+  Qwen2.5-7B-Instruct Q4_K_M GGUF ->  API on port 8001
+
+Terminal 2: RAG API
+  LangGraph + Chroma + local docs + Tavily fallback -> FastAPI on port 8000
+```
+
+Why this approach:
+
+- Keeps model serving isolated from the RAG application.
+- Lets LangChain use vLLM through its OpenAI-compatible client.
+- Makes it easy to swap models without rewriting graph logic.
+- Keeps local document RAG and web-search fallback in the application layer.
+
+Important vLLM notes:
+
+- Run vLLM in WSL2/Linux/Docker, not native Windows.
+- Use a **single-file GGUF** for Qwen2.5-7B Q4_K_M.
+- Keep `--served-model-name qwen2.5-7b-instruct-q4_k_m`, because the app uses that model name.
+- Keep vLLM running before starting the RAG API.
+
 ## Features
 
-- **Intelligent Routing**: Routes queries to either vectorstore (RAG) or web search based on query type
-- **Document Retrieval**: Retrieves relevant documents from a vector store
+- **Local-First RAG**: Retrieves from local `.tex`, `.pdf`, and `.txt` files before falling back to web search
+- **Document Retrieval**: Retrieves relevant documents from a Chroma vector store
 - **Relevance Grading**: Automatically grades retrieved documents for relevance to the question
 - **Hallucination Detection**: Verifies that generated answers are grounded in retrieved documents
 - **Answer Validation**: Checks that generated answers actually address the original question
-- **Web Search Fallback**: Automatically performs web search when documents are insufficient
+- **Web Search Fallback**: Automatically performs web search when local documents are insufficient
 - **Iterative Refinement**: Regenerates answers if they don't meet quality standards
 - **State Management**: Maintains conversation state throughout the reasoning process
 
@@ -41,70 +69,181 @@ An intelligent retrieval-augmented generation system built with LangChain and La
 
 The system follows this decision flow:
 
-1. **Route Question**: Determines if the query should go to vectorstore RAG or web search
-2. **Retrieve**: If RAG, retrieves relevant documents from the vector store
-3. **Grade Documents**: Evaluates document relevance; flags for web search if needed
-4. **Decide**: Determines whether to proceed with generation or switch to web search
-5. **Generate**: Uses an LLM to generate an answer
-6. **Check Hallucinations**: Verifies the answer is grounded in retrieved documents
-7. **Validate Answer**: Confirms the answer addresses the original question
-8. **Iterate**: Regenerates if needed, or searches web as fallback
+1. **Retrieve**: Retrieves relevant local document chunks from Chroma
+2. **Grade Documents**: Evaluates whether retrieved chunks answer the question
+3. **Decide**: Generates from local context, or switches to web search if local context is weak
+4. **Generate**: Uses a vLLM-served Qwen model to generate an answer
+5. **Check Hallucinations**: Verifies the answer is grounded in retrieved documents
+6. **Validate Answer**: Confirms the answer addresses the original question
+7. **Iterate**: Regenerates if needed, or searches web as fallback
 
 ## Setup
 
 ### Prerequisites
 
-- Python 3.11+
-- Virtual environment (recommended)
+- WSL2 Ubuntu, Linux, or Docker for vLLM. vLLM does not run natively on Windows.
+- NVIDIA GPU visible inside WSL. Verify with `nvidia-smi`.
+- Python 3.11+ for this RAG API project.
+- `uv` for project and vLLM environment management.
+- A Tavily API key for web-search fallback.
 
-### Installation
+### 1. Install Project Dependencies
 
-1. Clone the repository:
-   ```bash
-   git clone <repository-url>
-   cd advanced-rag
-   ```
+Run these commands in WSL from the project directory:
 
-2. Create and activate a virtual environment:
-   ```bash
-   python -m venv .venv
-   .venv\Scripts\Activate.ps1  # Windows PowerShell
-   # or
-   source .venv/bin/activate  # macOS/Linux
-   ```
+```bash
+cd /mnt/c/Users/Chivukula/Projects/advanced-rag
+uv sync
+```
 
-3. Install dependencies:
-   ```bash
-   pip install -e .
-   ```
+You do not need to manually activate `.venv` when using `uv run`.
 
-4. Set up environment variables:
-   Create a `.env` file with your API keys:
-   ```
-   OPENAI_API_KEY=your_openai_key
-   TAVILY_API_KEY=your_tavily_key
-   GOOGLE_API_KEY=your_google_key
-   ```
+### 2. Configure Environment
+
+Create `.env` in the repo root:
+
+```env
+VLLM_BASE_URL=http://localhost:8001/v1
+VLLM_API_KEY=local-vllm
+VLLM_MODEL=qwen2.5-7b-instruct-q4_k_m
+TAVILY_API_KEY=your_tavily_key
+LOCAL_DOCS_DIR=documents
+API_SECRET_KEY=your_api_key_for_the_fastapi_endpoint
+```
+
+### 3. Install vLLM In WSL
+
+This is the core model-serving layer. It runs independently from the RAG API and exposes an OpenAI-compatible endpoint.
+
+Use a separate environment for vLLM:
+
+```bash
+uv venv ~/venvs/vllm --python 3.12 --seed
+source ~/venvs/vllm/bin/activate
+
+mkdir -p ~/tmp ~/.cache/uv
+export TMPDIR=$HOME/tmp
+export UV_CACHE_DIR=$HOME/.cache/uv
+export UV_TORCH_BACKEND=cu129
+
+uv pip install "vllm==0.19.1" --torch-backend=cu129
+```
+
+Install a C compiler for Triton. If `sudo` asks for a password you do not know, start WSL as root from Windows PowerShell with `wsl -d Ubuntu -u root`, then run the same `apt` commands.
+
+```bash
+sudo apt update
+sudo apt install -y build-essential
+```
+
+Verify vLLM and CUDA:
+
+```bash
+python - <<'PY'
+import torch
+import importlib.metadata as md
+
+print("torch:", torch.__version__)
+print("torch cuda:", torch.version.cuda)
+print("cuda available:", torch.cuda.is_available())
+print("vllm:", md.version("vllm"))
+PY
+```
+
+### 4. Download A Single-File GGUF
+
+vLLM's GGUF support expects a single `.gguf` file. The official Qwen GGUF repo can be split into multiple files, so use a single-file Q4_K_M download.
+
+```bash
+source ~/venvs/vllm/bin/activate
+uv pip install -U "huggingface_hub[cli]"
+
+mkdir -p ~/models/qwen2.5-7b-instruct-q4km
+
+hf download matrixportal/Qwen2.5-7B-Instruct-GGUF \
+  --include "qwen2.5-7b-instruct-q4_k_m.gguf" \
+  --local-dir ~/models/qwen2.5-7b-instruct-q4km
+
+ls -lh ~/models/qwen2.5-7b-instruct-q4km
+```
+
+The `.gguf` file should be several GB, not empty.
+
+### 5. Start vLLM
+
+Keep this terminal running. This is the model server that the RAG app calls through `VLLM_BASE_URL=http://localhost:8001/v1`:
+
+```bash
+source ~/venvs/vllm/bin/activate
+export CC=/usr/bin/gcc
+export CXX=/usr/bin/g++
+
+vllm serve ~/models/qwen2.5-7b-instruct-q4km/qwen2.5-7b-instruct-q4_k_m.gguf \
+  --tokenizer Qwen/Qwen2.5-7B-Instruct \
+  --hf-config-path Qwen/Qwen2.5-7B-Instruct \
+  --host 0.0.0.0 \
+  --port 8001 \
+  --served-model-name qwen2.5-7b-instruct-q4_k_m \
+  --gpu-memory-utilization 0.75 \
+  --max-model-len 4096 \
+  --enforce-eager
+```
+
+Test from another terminal:
+
+```bash
+curl http://localhost:8001/v1/models
+
+curl -X POST http://localhost:8001/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "qwen2.5-7b-instruct-q4_k_m",
+    "messages": [{"role": "user", "content": "Say hello in one sentence."}]
+  }'
+```
 
 ## Usage
 
 ### Prepare Vector Store
 
-First, ingest documents into the vector store:
+Put local `.tex`, `.pdf`, and `.txt` files in `documents/`, then ingest them into the vector store:
 
 ```bash
-python ingestion.py
+uv run python ingestion.py --docs-dir documents --rebuild
 ```
 
-This loads URLs from `ingestion.py`, splits them into chunks, and creates embeddings using HuggingFace models.
+To also seed the original web URLs, add `--include-web`:
+
+```bash
+uv run python ingestion.py --docs-dir documents --include-web --rebuild
+```
+
+This loads local files, splits them into chunks, and creates embeddings using HuggingFace models.
 
 ### Run the RAG System
 
+Keep vLLM running on port `8001`, then start the FastAPI RAG API in a second WSL terminal:
+
 ```bash
-python main.py
+uv run python main.py
 ```
 
-The default example asks "agent memory?" and prints the workflow's reasoning and final answer.
+For debugging, run Uvicorn without the reload process:
+
+```bash
+uv run uvicorn api.app:api --host 127.0.0.1 --port 8000 --log-level debug
+```
+
+Test the API:
+
+```bash
+curl http://localhost:8000/health
+
+curl -X POST http://localhost:8000/chat \
+  -H "Content-Type: application/json" \
+  -H "X-Api-Key: your_api_key_for_the_fastapi_endpoint" \
+  -d '{"question":"What do my local documents say about this topic?"}'
+```
 
 ### Custom Queries
 
@@ -132,10 +271,10 @@ See `pyproject.toml` for the complete list.
 
 ## Configuration
 
-- **Vector Store**: Uses Chroma client (can be modified in `ingestion.py`)
+- **Vector Store**: Uses Chroma client (configured through environment variables)
 - **Embeddings**: HuggingFace "all-MiniLM-L6-v2" model
-- **LLM**: Configured in individual chain files (supports OpenAI, Google, HuggingFace)
-- **Chunk Size**: 250 tokens with no overlap (configurable in `ingestion.py`)
+- **LLM**: vLLM OpenAI-compatible endpoint serving Qwen2.5-7B-Instruct GGUF Q4_K_M
+- **Chunk Size**: 700 tokens with 100 token overlap (configurable in `ingestion.py`)
 
 ## Testing
 
@@ -158,6 +297,65 @@ isort .
 ```
 
 ## Troubleshooting
+
+### vLLM: `libcudart.so.13` Missing
+
+The installed vLLM wheel expects CUDA 13. Recreate the vLLM environment with the CUDA 12.9 backend:
+
+```bash
+deactivate 2>/dev/null || true
+rm -rf ~/venvs/vllm
+
+uv venv ~/venvs/vllm --python 3.12 --seed
+source ~/venvs/vllm/bin/activate
+
+export UV_TORCH_BACKEND=cu129
+uv pip install "vllm==0.19.1" --torch-backend=cu129
+```
+
+### vLLM: No Space Left During Install
+
+If extraction fails under `/tmp`, use a disk-backed temp directory:
+
+```bash
+mkdir -p ~/tmp ~/.cache/uv
+export TMPDIR=$HOME/tmp
+export UV_CACHE_DIR=$HOME/.cache/uv
+```
+
+### vLLM: Remote GGUF Config Or Split File Errors
+
+Use a local single-file `.gguf` and include `--hf-config-path Qwen/Qwen2.5-7B-Instruct`. Do not serve the official split GGUF repo directly.
+
+### vLLM: Failed To Find C Compiler
+
+Install build tools:
+
+```bash
+sudo apt update
+sudo apt install -y build-essential
+```
+
+Then export:
+
+```bash
+export CC=/usr/bin/gcc
+export CXX=/usr/bin/g++
+```
+
+### API: `curl` Cannot Connect To Port 8000
+
+If `uv run python main.py` only prints `Started reloader process`, run without reload to see startup errors:
+
+```bash
+uv run uvicorn api.app:api --host 127.0.0.1 --port 8000 --log-level debug
+```
+
+Check that the server is listening:
+
+```bash
+ss -ltnp | grep 8000
+```
 
 ### Import Errors
 If you encounter `ImportError: cannot import name 'grade_documents'`:

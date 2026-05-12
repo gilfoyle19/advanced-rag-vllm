@@ -151,11 +151,17 @@ activemq-data/
 .env
 .envrc
 .venv
+.uv-cache/
 env/
 venv/
 ENV/
 env.bak/
 venv.bak/
+
+# Local RAG corpus
+documents/*
+!documents/.gitkeep
+models/
 
 # Spyder project settings
 .spyderproject

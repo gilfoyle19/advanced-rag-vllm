@@ -14,8 +14,6 @@ from graph.graph import app as rag_graph
 from api.schemas import ChatRequest, ChatResponse, DocumentItem
 from api.auth import verify_api_key
 
-
-
 # ---------------------------------------------------------------------------
 # Rate limiter
 # ---------------------------------------------------------------------------
@@ -70,7 +68,9 @@ async def chat(request: Request, body: ChatRequest):
     try:
         result = rag_graph.invoke(input={"question": body.question})
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Graph invocation failed: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Graph invocation failed: {str(e)}"
+        )
 
     # Extract generation
     answer = result.get("generation", "")
@@ -82,13 +82,12 @@ async def chat(request: Request, body: ChatRequest):
     documents = [
         DocumentItem(
             page_content=doc.page_content,
-            source=doc.metadata.get("source") if doc.metadata else None
+            source=doc.metadata.get("source") if doc.metadata else None,
         )
         for doc in raw_docs
     ]
 
-    # Convert web_search "Yes"/"No" → bool
-    web_search_used = result.get("web_search", "No") == "Yes"
+    web_search_used = bool(result.get("web_search", False))
 
     return ChatResponse(
         answer=answer,

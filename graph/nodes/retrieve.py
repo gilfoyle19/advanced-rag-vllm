@@ -1,6 +1,6 @@
 from typing import Any, Dict
 from graph.state import GraphState
-from ingestion import retriever
+from ingestion import get_retriever
 
 
 def retrieve(state: GraphState) -> Dict[str, Any]:
@@ -10,5 +10,5 @@ def retrieve(state: GraphState) -> Dict[str, Any]:
     Output: dict with question and retrieved documents
     """
     question = state["question"]
-    documents = retriever.invoke(question)
+    documents = get_retriever().invoke(question)
     return {"documents": documents, "question": question}

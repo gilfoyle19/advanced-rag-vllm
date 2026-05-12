@@ -1,4 +1,6 @@
-from typing import List, TypedDict
+from typing import List, NotRequired, TypedDict
+
+from langchain_core.documents import Document
 
 
 class GraphState(TypedDict):
@@ -10,6 +12,6 @@ class GraphState(TypedDict):
     documents: list of documents"""
 
     question: str
-    generation: str
-    web_search: bool
-    documents: List[str]
+    generation: NotRequired[str]
+    web_search: NotRequired[bool]
+    documents: NotRequired[List[Document]]
