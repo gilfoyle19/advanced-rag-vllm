@@ -308,6 +308,26 @@ Run tests with:
 pytest graph/chains/tests/
 ```
 
+### Run the Evaluation Benchmark
+
+Rebuild Chroma from the benchmark document, keep vLLM running, and run the development split:
+
+```bash
+source ~/.venvs/advanced-rag/bin/activate
+python ingestion.py --docs-dir documents --rebuild
+python evaluation/run_evals.py --split dev --mode all --judge llm
+```
+
+For a fast retrieval-only check that does not call the generation or grading graph:
+
+```bash
+python evaluation/run_evals.py --split dev --mode retrieval
+```
+
+Use `--ids desmi-007,desmi-009` to run selected cases, or `--dry-run` to validate and list the selected dataset without invoking the pipeline. Each completed run writes `cases.jsonl`, `summary.json`, and `report.md` under `evaluation/results/`.
+
+Pipeline mode checks the configured vLLM `/models` endpoint before starting. Retrieval-only mode does not require vLLM.
+
 ## Development
 
 - **Code Formatting**: Uses Black
@@ -390,5 +410,3 @@ If you encounter `ImportError: cannot import name 'grade_documents'`:
 ### Vector Store Issues
 - Ensure the `.chroma` directory exists or run `ingestion.py` to create it
 - Check that HuggingFace embeddings are downloaded
-
-

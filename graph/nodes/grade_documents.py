@@ -38,4 +38,9 @@ def grade_documents(state: GraphState) -> Dict[str, Any]:
         if relevant:
             filtered_docs.append(d)
     web_search = not filtered_docs
-    return {"documents": filtered_docs, "question": question, "web_search": web_search}
+    return {
+        "documents": filtered_docs,
+        "graded_documents": filtered_docs,
+        "question": question,
+        "web_search": web_search,
+    }

@@ -163,6 +163,9 @@ documents/*
 !documents/.gitkeep
 models/
 
+# Generated evaluation reports
+evaluation/results/
+
 # Spyder project settings
 .spyderproject
 .spyproject

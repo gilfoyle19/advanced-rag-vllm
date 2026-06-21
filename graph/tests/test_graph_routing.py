@@ -52,9 +52,7 @@ def test_unsupported_generation_stops_at_limit(monkeypatch):
 
 
 def test_unhelpful_generation_searches_web_only_once(monkeypatch):
-    monkeypatch.setattr(
-        graph_module, "hallucination_grader", StaticGrader(result=True)
-    )
+    monkeypatch.setattr(graph_module, "hallucination_grader", StaticGrader(result=True))
     monkeypatch.setattr(graph_module, "answer_grader", StaticGrader(result=False))
 
     before_web = graph_state(web_search_attempts=MAX_WEB_SEARCH_ATTEMPTS - 1)

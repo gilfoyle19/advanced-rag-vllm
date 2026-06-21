@@ -18,3 +18,4 @@ class GraphState(TypedDict):
     web_search_attempts: NotRequired[int]
     documents: NotRequired[List[Document]]
     retrieved_documents: NotRequired[List[Document]]
+    graded_documents: NotRequired[List[Document]]
