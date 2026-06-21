@@ -15,8 +15,11 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from graph.config import (
     CHROMA_COLLECTION_NAME,
     CHROMA_PERSIST_DIRECTORY,
+    CHUNK_OVERLAP,
+    CHUNK_SIZE,
     EMBEDDING_MODEL,
     LOCAL_DOCS_DIR,
+    RETRIEVAL_K,
 )
 
 DEFAULT_URLS = [
@@ -42,13 +45,13 @@ def get_vectorstore() -> Chroma:
 
 @lru_cache(maxsize=1)
 def get_retriever():
-    return get_vectorstore().as_retriever(search_kwargs={"k": 5})
+    return get_vectorstore().as_retriever(search_kwargs={"k": RETRIEVAL_K})
 
 
 def get_text_splitter() -> RecursiveCharacterTextSplitter:
     return RecursiveCharacterTextSplitter.from_tiktoken_encoder(
-        chunk_size=700,
-        chunk_overlap=100,
+        chunk_size=CHUNK_SIZE,
+        chunk_overlap=CHUNK_OVERLAP,
     )
 
 
@@ -134,6 +137,7 @@ def document_id(doc: Document, index: int) -> str:
 def ingest_documents(documents: Sequence[Document], rebuild: bool = False) -> int:
     persist_dir = Path(CHROMA_PERSIST_DIRECTORY)
     if rebuild and persist_dir.exists():
+        get_retriever.cache_clear()
         shutil.rmtree(persist_dir)
 
     splits = split_documents(documents)
@@ -143,6 +147,7 @@ def ingest_documents(documents: Sequence[Document], rebuild: bool = False) -> in
     vectorstore = get_vectorstore()
     ids = [document_id(doc, index) for index, doc in enumerate(splits)]
     vectorstore.add_documents(splits, ids=ids)
+    get_retriever.cache_clear()
     return len(splits)
 
 

@@ -13,5 +13,8 @@ class GraphState(TypedDict):
 
     question: str
     generation: NotRequired[str]
+    generation_attempts: NotRequired[int]
     web_search: NotRequired[bool]
+    web_search_attempts: NotRequired[int]
     documents: NotRequired[List[Document]]
+    retrieved_documents: NotRequired[List[Document]]

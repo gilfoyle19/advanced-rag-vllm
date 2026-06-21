@@ -108,6 +108,9 @@ VLLM_API_KEY=local-vllm
 VLLM_MODEL=qwen2.5-7b-instruct-q4_k_m
 TAVILY_API_KEY=your_tavily_key
 LOCAL_DOCS_DIR=documents
+CHUNK_SIZE=900
+CHUNK_OVERLAP=150
+RETRIEVAL_K=3
 API_SECRET_KEY=your_api_key_for_the_fastapi_endpoint
 ```
 
@@ -245,6 +248,18 @@ curl -X POST http://localhost:8000/chat \
   -d '{"question":"What do my local documents say about this topic?"}'
 ```
 
+### Run the Streamlit Demo
+
+Keep vLLM running on port `8001`, configure the same `.env` values used by the API, and start the demo:
+
+```bash
+uv run streamlit run streamlit_app.py
+```
+
+Open the URL printed by Streamlit, upload one or more `.pdf`, `.txt`, or `.tex` files, click **Ingest documents**, and use the chat box. Uploaded files are saved under `documents/streamlit_uploads/` and added to the same persistent Chroma collection used by the FastAPI service.
+
+The Streamlit interface is intended as a local demo. Its uploaded documents and vector index are shared across browser sessions, and the visible chat history is not passed back to the graph as conversational memory.
+
 ### Custom Queries
 
 Modify `main.py` to ask different questions:
@@ -274,7 +289,16 @@ See `pyproject.toml` for the complete list.
 - **Vector Store**: Uses Chroma client (configured through environment variables)
 - **Embeddings**: HuggingFace "all-MiniLM-L6-v2" model
 - **LLM**: vLLM OpenAI-compatible endpoint serving Qwen2.5-7B-Instruct GGUF Q4_K_M
-- **Chunk Size**: 700 tokens with 100 token overlap (configurable in `ingestion.py`)
+- **Chunking**: Configured with `CHUNK_SIZE` and `CHUNK_OVERLAP` environment variables. The defaults are 900 and 150 tokens to preserve page and table context in technical manuals.
+- **Retrieval Count**: Configured with `RETRIEVAL_K`; the default is 3 to keep the assembled context within the model window.
+
+After changing chunk size or overlap, rebuild the vector store because existing chunks are not rewritten automatically:
+
+```bash
+python ingestion.py --docs-dir documents --rebuild
+```
+
+Changing only `RETRIEVAL_K` does not require re-ingestion, but the running Streamlit or API process must be restarted to reload configuration.
 
 ## Testing
 
@@ -366,7 +390,5 @@ If you encounter `ImportError: cannot import name 'grade_documents'`:
 ### Vector Store Issues
 - Ensure the `.chroma` directory exists or run `ingestion.py` to create it
 - Check that HuggingFace embeddings are downloaded
-
-
 
 

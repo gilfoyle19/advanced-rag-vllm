@@ -21,17 +21,21 @@ def grade_documents(state: GraphState) -> Dict[str, Any]:
     documents = state["documents"]
 
     filtered_docs = []
-    web_search = True
-    for d in documents:
+    for index, d in enumerate(documents, start=1):
         score = retrieval_grader.invoke(
             {"question": question, "document": d.page_content}
         )
-        grade = score.binary_score
-        if str(grade).lower() == "yes":
-            print("---GRADE: DOCUMENT RELEVANT---")
+        grade = str(score.binary_score).strip().lower()
+        relevant = grade in {"yes", "true", "1"}
+        source = d.metadata.get("source", "unknown") if d.metadata else "unknown"
+        page = d.metadata.get("page") if d.metadata else None
+        page_label = page + 1 if isinstance(page, int) else "unknown"
+        decision = "RELEVANT" if relevant else "NOT RELEVANT"
+        print(
+            f"---GRADE: DOCUMENT {index} {decision} "
+            f"(source={source}, page={page_label})---"
+        )
+        if relevant:
             filtered_docs.append(d)
-        else:
-            print("---GRADE: DOCUMENT NOT RELEVANT---")
-            continue
     web_search = not filtered_docs
     return {"documents": filtered_docs, "question": question, "web_search": web_search}

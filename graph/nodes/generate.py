@@ -13,11 +13,17 @@ def format_documents(documents) -> str:
 
 
 def generate(state: GraphState) -> Dict[str, Any]:
-    print("---GENERATE---")
+    generation_attempts = state.get("generation_attempts", 0) + 1
+    print(f"---GENERATE (ATTEMPT {generation_attempts})---")
     question = state["question"]
     documents = state.get("documents", [])
 
     generation = generation_chain.invoke(
         {"context": format_documents(documents), "question": question}
     )
-    return {"documents": documents, "question": question, "generation": generation}
+    return {
+        "documents": documents,
+        "question": question,
+        "generation": generation,
+        "generation_attempts": generation_attempts,
+    }
