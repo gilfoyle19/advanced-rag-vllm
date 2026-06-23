@@ -16,9 +16,9 @@ LOCAL_DOCS_DIR = Path(os.getenv("LOCAL_DOCS_DIR", "documents"))
 
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "all-MiniLM-L6-v2")
 
-CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", "900"))
-CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "150"))
-RETRIEVAL_K = int(os.getenv("RETRIEVAL_K", "3"))
+CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", "750"))
+CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "120"))
+RETRIEVAL_K = int(os.getenv("RETRIEVAL_K", "8"))
 MAX_GENERATION_ATTEMPTS = int(os.getenv("MAX_GENERATION_ATTEMPTS", "2"))
 MAX_WEB_SEARCH_ATTEMPTS = int(os.getenv("MAX_WEB_SEARCH_ATTEMPTS", "1"))
 

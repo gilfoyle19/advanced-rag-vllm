@@ -7,6 +7,7 @@ from graph.chains.answer_grader import answer_grader
 from graph.chains.hallucination_grader import hallucination_grader
 from graph.config import MAX_GENERATION_ATTEMPTS, MAX_WEB_SEARCH_ATTEMPTS
 from graph.consts import FALLBACK, GENERATE, GRADE_DOCUMENTS, RETRIEVE, WEBSEARCH
+from graph.local_questions import is_local_document_question
 from graph.nodes import fallback, generate, grade_documents, retrieve, web_search
 from graph.nodes.generate import format_documents
 from graph.state import GraphState
@@ -18,6 +19,9 @@ def decide_to_generate(state):
     print("---ASSESS GRADED DOCUMENTS---")
 
     if state.get("web_search") or not state.get("documents"):
+        if is_local_document_question(state["question"]):
+            print("---DECISION: LOCAL DOCUMENTS INSUFFICIENT, STOP---")
+            return FALLBACK
         print("---DECISION: LOCAL DOCUMENTS INSUFFICIENT, INCLUDE WEB SEARCH---")
         return WEBSEARCH
     else:
@@ -44,6 +48,9 @@ def grade_generation_grounded_in_documents_and_question(state: GraphState) -> st
         if answer_grade := score.binary_score:
             print("---DECISION: GENERATION ADDRESSES QUESTION---")
             return "useful"
+        if is_local_document_question(question):
+            print("---DECISION: GENERATION DOES NOT ADDRESS LOCAL QUESTION, STOP---")
+            return "give up"
         if web_search_attempts < MAX_WEB_SEARCH_ATTEMPTS:
             print("---DECISION: GENERATION DOES NOT ADDRESS QUESTION, SEARCH WEB---")
             return "not useful"
@@ -73,6 +80,7 @@ workflow.add_conditional_edges(
     {
         WEBSEARCH: WEBSEARCH,
         GENERATE: GENERATE,
+        FALLBACK: FALLBACK,
     },
 )
 

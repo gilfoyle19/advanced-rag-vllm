@@ -1,6 +1,12 @@
+import sys
+from pathlib import Path
 from types import SimpleNamespace
 
 from langchain_core.documents import Document
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 import graph.graph as graph_module
 from graph.config import MAX_GENERATION_ATTEMPTS, MAX_WEB_SEARCH_ATTEMPTS
@@ -64,6 +70,27 @@ def test_unhelpful_generation_searches_web_only_once(monkeypatch):
     )
     assert (
         graph_module.grade_generation_grounded_in_documents_and_question(after_web)
+        == "give up"
+    )
+
+
+def test_local_document_question_does_not_use_web_when_retrieval_fails():
+    state = graph_state(
+        question="What is the research goal stated in Chapter 1?",
+        documents=[],
+        web_search=True,
+    )
+
+    assert graph_module.decide_to_generate(state) == graph_module.FALLBACK
+
+
+def test_local_document_question_does_not_use_web_when_answer_not_useful(monkeypatch):
+    monkeypatch.setattr(graph_module, "hallucination_grader", StaticGrader(result=True))
+    monkeypatch.setattr(graph_module, "answer_grader", StaticGrader(result=False))
+    state = graph_state(question="What is the research goal stated in Chapter 1?")
+
+    assert (
+        graph_module.grade_generation_grounded_in_documents_and_question(state)
         == "give up"
     )
 

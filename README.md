@@ -108,9 +108,9 @@ VLLM_API_KEY=local-vllm
 VLLM_MODEL=qwen2.5-7b-instruct-q4_k_m
 TAVILY_API_KEY=your_tavily_key
 LOCAL_DOCS_DIR=documents
-CHUNK_SIZE=900
-CHUNK_OVERLAP=150
-RETRIEVAL_K=3
+CHUNK_SIZE=750
+CHUNK_OVERLAP=120
+RETRIEVAL_K=8
 API_SECRET_KEY=your_api_key_for_the_fastapi_endpoint
 ```
 
@@ -289,8 +289,8 @@ See `pyproject.toml` for the complete list.
 - **Vector Store**: Uses Chroma client (configured through environment variables)
 - **Embeddings**: HuggingFace "all-MiniLM-L6-v2" model
 - **LLM**: vLLM OpenAI-compatible endpoint serving Qwen2.5-7B-Instruct GGUF Q4_K_M
-- **Chunking**: Configured with `CHUNK_SIZE` and `CHUNK_OVERLAP` environment variables. The defaults are 900 and 150 tokens to preserve page and table context in technical manuals.
-- **Retrieval Count**: Configured with `RETRIEVAL_K`; the default is 3 to keep the assembled context within the model window.
+- **Chunking**: Configured with `CHUNK_SIZE` and `CHUNK_OVERLAP` environment variables. The defaults are 750 and 120 tokens, tuned for the current 51-page scientific report so retrieval keeps complete subsection context while avoiding overly broad chapter-level chunks.
+- **Retrieval Count**: Configured with `RETRIEVAL_K`; the default is 8 to improve coverage for report questions that span adjacent sections, requirements, and interface descriptions.
 
 After changing chunk size or overlap, rebuild the vector store because existing chunks are not rewritten automatically:
 
@@ -324,7 +324,7 @@ For a fast retrieval-only check that does not call the generation or grading gra
 python evaluation/run_evals.py --split dev --mode retrieval
 ```
 
-Use `--ids desmi-007,desmi-009` to run selected cases, or `--dry-run` to validate and list the selected dataset without invoking the pipeline. Each completed run writes `cases.jsonl`, `summary.json`, and `report.md` under `evaluation/results/`.
+Use `--ids creya-007,creya-009` to run selected cases, or `--dry-run` to validate and list the selected dataset without invoking the pipeline. Each completed run writes `cases.jsonl`, `summary.json`, and `report.md` under `evaluation/results/`.
 
 Pipeline mode checks the configured vLLM `/models` endpoint before starting. Retrieval-only mode does not require vLLM.
 

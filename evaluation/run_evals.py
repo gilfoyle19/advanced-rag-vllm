@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run retrieval and end-to-end evaluations for the DESMI RAG benchmark."""
+"""Run retrieval and end-to-end evaluations for the local PDF RAG benchmark."""
 
 from __future__ import annotations
 
@@ -34,7 +34,7 @@ from pydantic import BaseModel, Field
 from pypdf import PdfReader
 
 EXPECTED_SOURCE_SHA256 = (
-    "B88E454110CFE5FE8E990C701960DA8CBE59F53D48887454502D226A25DBCB7A"
+    "FFA42FFEE784AD289FDC1B0C92EF0BDAFA4D1FB5D0442FDD2E727B1860A6ADCF"
 )
 FALLBACK_PREFIX = "I could not produce an answer"
 
@@ -425,9 +425,11 @@ def run_case(
     try:
         with time_limit(args.timeout):
             if args.mode == "retrieval":
-                from ingestion import get_retriever
+                from graph.nodes.retrieve import retrieve
 
-                raw_documents = list(get_retriever().invoke(case["question"]))
+                raw_documents = list(
+                    retrieve({"question": case["question"]})["documents"]
+                )
             else:
                 from graph.graph import app as rag_graph
 
@@ -1004,12 +1006,12 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--dataset",
         type=Path,
-        default=REPO_ROOT / "evaluation" / "desmi_nsl_benchmark.jsonl",
+        default=REPO_ROOT / "evaluation" / "benchmark.jsonl",
     )
     parser.add_argument(
         "--source-document",
         type=Path,
-        default=REPO_ROOT / "documents" / "t1542uk.pdf",
+        default=REPO_ROOT / "documents" / "Scientific_Report (2) (1).pdf",
     )
     parser.add_argument("--split", choices=["dev", "test", "all"], default="dev")
     parser.add_argument(
